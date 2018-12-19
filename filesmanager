@@ -1,0 +1,294 @@
+// THIS CLASS IS TO HANDLE METHODS SUCH AS FINDING SHA-1'S, MOVING POINTERS, ETC. JUST EXCESSIVE METHODS, HANDLING PATHNAMES
+
+package gitlet;
+
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+import java.util.HashMap;
+import java.util.ArrayList;
+import java.io.IOException;
+import java.util.function.Function;
+
+
+public class FilesManager implements Serializable {
+
+    //create variables that can be accessed from anywhere
+    private static final String pathString = "__gitlet";
+    private static final String archivePathName = pathString + "/archive/";
+    private static final String stagingPathName = pathString + "/staging/";
+    private static final String serializedPathName = pathString + "/serialized/";
+    static final String _untrackFileNameMarker = "_untrackFileNameMarker";
+    private static final String workPathName = "__gitlet_work_space/";
+    private static final String branchObjectName = "fixed_branch_object";
+
+    static String getCommitShaId(Commit commit) throws IOException {
+        //check if initial commit, then returns a SHA-1 for initial commit;
+
+        return getObjectShaId(commit);
+    }
+
+    static String getObjectShaId(Object o) throws IOException {
+        byte[] objectToBytes = FilesManager.writeObjectToBytes(o);
+        return gitlet.Utils.sha1(objectToBytes);
+    }
+
+    //if the commit exists already -> return fileName in serialized folder
+
+    //check if commit's hashmap is null
+
+    //if NOT NULL, read the contents of the files and returns a String of sha1
+
+
+    static Object readIn(String fileName) {
+        String filePathString = serializedPathName + fileName;
+        File inFile = new File(filePathString);
+        Object obj;
+        try {
+            ObjectInputStream inp = new ObjectInputStream(new FileInputStream(inFile));
+            obj = inp.readObject();
+            inp.close();
+
+        } catch (IOException | ClassNotFoundException excp) {
+            obj = null;
+            System.out.println("Could not read in  " + inFile.toString() + ".");
+        }
+        System.out.println("out FilesManager.createObjectFromFile: obj" + obj);
+        return obj;
+    }
+
+    //writes object to file -> stores it in serialized folder by its SHA-1
+
+    static void writeObjectToFile(Object o, String file) {
+        String filePathString = serializedPathName + file;
+        File outFile = new File(filePathString);
+        System.out.println("save " + o.getClass().getName() + " obj to outFile: " + outFile.toString());
+        try {
+            ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(outFile));
+            out.writeObject(o);
+            out.close();
+        } catch (IOException excp) {
+            throw new Error("saveObjectToFile: Internal error serializing commit.");
+        }
+    }
+
+    static void writeObjectToStagingFile(Object o, String file) {
+        String filePathString = stagingPathName + file;
+        File outFile = new File(filePathString);
+        System.out.println("save " + o.getClass().getName() + " obj to outFile: " + outFile.toString());
+        try {
+            ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(outFile));
+            out.writeObject(o);
+            out.close();
+        } catch (IOException excp) {
+            throw new Error("saveObjectToFile: Internal error serializing commit.");
+        }
+    }
+
+    static void writeObjectToArchiveFile(Object o, String file) {
+        String filePathString = archivePathName + file;
+        File outFile = new File(filePathString);
+        System.out.println("save " + o.getClass().getName() + " obj to outFile: " + outFile.toString());
+        try {
+            ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(outFile));
+            out.writeObject(o);
+            out.close();
+        } catch (IOException excp) {
+            throw new Error("saveObjectToFile: Internal error serializing commit.");
+        }
+    }
+
+
+    //writes object to bytes
+
+    static byte[] writeObjectToBytes(Object obj) throws IOException {
+        try {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            ObjectOutputStream os = new ObjectOutputStream(out);
+            os.writeObject(obj);
+            return out.toByteArray();
+        } catch (IOException e) {
+            System.out.println("Serialization error: could not write" + obj.toString() + "to byte array.");
+            return null;
+        }
+
+    }
+
+    //handles creating an initial commit
+    static void createInitialCommit(Commit commit) throws IOException {
+        writeObjectToFile(commit, FilesManager.getCommitShaId(commit));
+    }
+
+    static void createInitialBranch(BranchManager b) throws IOException {
+        writeObjectToFile(b, FilesManager.branchObjectName);
+    }
+
+    static boolean createGitletDirectoryIfNeeded() {
+        boolean r = false;
+        String pathString = "__gitlet";
+        if (!FilesManager.fileExist(pathString)) {
+            new File(pathString).mkdirs();
+            new File(pathString + "/staging").mkdirs();
+            new File(pathString + "/archive").mkdirs();
+            new File(pathString + "/serialized").mkdirs();
+            //new File(pathString+"/branches").mkdirs();
+
+            if (!fileExist(workPathName)) {
+                new File(workPathName).mkdirs();
+            }
+
+            r = true;
+        }
+        return r;
+    }
+
+    static boolean fileExist(String filePathString) {
+        boolean r = true;
+        File f = new File(filePathString);
+        if (!f.exists() || !f.isDirectory()) {
+            r = false;
+        }
+
+        System.out.println("out fileExist f=" + f.toString() + " r =" + r);
+        return r;
+    }
+
+    static BranchManager getBranchManager() throws IOException {
+        // String filePathString = serializedPathName + branchObjectName;
+        BranchManager branchManager = (BranchManager) FilesManager.readIn(branchObjectName);
+        return branchManager;
+    }
+
+    //return most recent commit //remember to add more for different cases
+    static Commit getLastCommit(BranchManager b) {
+        //look up what head is pointing to
+        HashMap<String, String> branchMap = b.getBranches();
+        String lastCommitShaId = branchMap.get("head");
+
+        //create file instance, read commit object back in from shaID filename
+        Commit parentCommit = (Commit) FilesManager.readIn(lastCommitShaId);
+        return parentCommit;
+
+    }
+
+    static File[] getListOfFilesInFolder(String folderPathString) {
+
+        File folder = new File(folderPathString);
+        File[] listOfFiles = folder.listFiles();
+
+        for (File file : listOfFiles) {
+            if (file.isFile()) {
+                System.out.println(file.getName());
+            }
+        }
+        return listOfFiles;
+    }
+
+    static File[] getListOfFilesInStagingFolder() {
+        return getListOfFilesInFolder(stagingPathName);
+    }
+
+    static File[] getListOfFilesInArchiveFolder() {
+        return getListOfFilesInFolder(archivePathName);
+    }
+
+    static void deleteOneFile(String filePathString) {
+
+        File file = new File(filePathString);
+        if (file.exists()) {
+            file.delete();
+        }
+    }
+
+    static void deleteOneFileInStagingFolder(String fileName) {
+
+        deleteOneFile(stagingPathName + fileName);
+
+    }
+
+    static void deleteFilesInStagingFolder() {
+        File[] files = getListOfFilesInFolder(stagingPathName);
+        for (File file : files) {
+            System.out.println("delete: " + file.getName());
+            file.delete();
+
+        }
+    }
+
+    static void stagingAFile(String fileName) {
+        deleteOneFileInStagingFolder(fileName); // delete whatever is in it
+
+        String from = fileName;
+        String to = stagingPathName + fileName;
+
+        copyAndPasteFile(from, to);
+    }
+
+    static void archivingAFile(String fileName) {
+        deleteOneFileInStagingFolder(fileName); // delete whatever is in it
+
+        String from = fileName;
+        String to = archivePathName + fileName;
+
+        copyAndPasteFile(from, to);
+    }
+
+    static void copyAndPasteFile(String fromString, String toString) {
+        File from = new File(fromString);
+        File to = new File(toString);
+        try {
+            copyFile(from, to);
+        } catch (Exception ex) {
+            throw new Error("copy error");
+        }
+    }
+
+    public static void copyFile(File from, File to) throws IOException {
+        Files.copy(from.toPath(), to.toPath());
+    }
+
+  /*  static void saveBranchToFile(Object obj){
+        saveObjectToFile(obj, _branchFileName);
+    } */
+
+    static boolean fileExistInWorkFolder(String fileName) {
+        String filePathString = workPathName + fileName;
+        return fileExist(filePathString);
+    }
+
+    static File createANewFileInArchive(String fileSHAidName) {
+        return new File(archivePathName + fileSHAidName);
+    }
+
+    static void initiateMarkerFile() {
+        //grab the first file from archive and past into staging as a marker
+        String markerFileName = archivePathName + _untrackFileNameMarker;
+        File[] files = getListOfFilesInSerializedFolder();
+        try {
+            copyFile(files[0], new File(markerFileName));
+        } catch (Exception ex) {
+            System.out.println("unable to make a marker file");
+        }
+    }
+
+    static File[] getListOfFilesInSerializedFolder() {
+        return getListOfFilesInFolder(serializedPathName);
+    }
+
+    static void createUntrackedFileInStaging(String fileString) throws IOException {
+        FilesManager.stagingAFile(fileString);
+        //String fileSHAidName = FilesManager.getObjectShaId();
+        File[] listStagingFolder = FilesManager.getListOfFilesInStagingFolder();
+        for (File staged : listStagingFolder) {
+            String stagedString = staged.toString();
+            stagedString = stagedString.replaceAll(stagedString, stagedString + _untrackFileNameMarker);
+            File replace = new File(stagedString);
+            staged.renameTo(replace);
+        }
+    }
+
+
+}
+
