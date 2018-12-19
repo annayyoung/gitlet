@@ -1,0 +1,58 @@
+package gitlet;
+import java.io.IOException;
+import java.io.Serializable;
+import java.io.File;
+import java.util.HashMap;
+
+public class BranchManager implements Serializable {
+    private HashMap<String, String> branches;
+    private String head;
+
+    public BranchManager() {
+        branches = new HashMap<String, String>();
+    }
+
+    public HashMap<String, String> getBranches() {
+        return branches;
+    }
+
+    public void setHeadPointer(String branchName, String currentCommitID) {
+        branches.put(branchName, currentCommitID);
+        //branches.put("head", currentCommitID);
+        head = branchName;
+        //
+        //  head = getHeadPointer(branches, currentCommitID);
+    }
+
+    public String getHeadPointerValue(HashMap<String, String> b) {
+
+        return branches.get(head);
+    }
+
+    //returns a string name
+    //this method needs to check that there is a
+    public String getHeadPointer(HashMap<String, String> branches, String commitID) {
+        for (String branch : branches.keySet()) {
+            if ((branches.get(head).equals(commitID)) && (branch.equals(head))) {
+                return head;
+            }
+        }
+        return null;
+    }
+
+    public void removeBranch(String branchName) {
+        try {
+            if (!branches.containsKey(branchName)) {
+                throw new Error("A branch with that name does not exist.");
+            } else if (head.equals(branchName)) {
+                throw new IOException("Cannot remove the current branch.");
+            }
+
+            branches.remove(branchName);
+        } catch (Error e) {
+            System.out.println("A branch with that name does not exist.");
+        } catch (IOException e) {
+            System.out.println("Cannot remove the current branch.");
+        }
+    }
+}
