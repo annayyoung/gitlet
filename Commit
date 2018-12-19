@@ -1,0 +1,68 @@
+package gitlet;
+import java.io.IOException;
+import java.io.StringBufferInputStream;
+import java.util.HashMap;
+import java.io.Serializable;
+import java.util.Date;
+import java.io.File;
+import java.nio.file.Files;
+
+
+public class Commit implements Serializable {
+
+    private String parentId;
+    private Date date;
+    private String message;
+    private HashMap<String, String> snapshot;
+
+
+    public Commit(String pId, String m) {
+        parentId = pId;
+        message = m;
+        date = new Date();
+        snapshot = new HashMap<String, String>();
+
+
+        //timeStamp = new Timestamp();
+       // snapshot = s.returnAll();
+
+    }
+
+
+    private String currentId(Commit commit) throws IOException {
+        return FilesManager.getCommitShaId(commit);
+        //takes filename and turns it into byte array -> turns byte array into sha1 ID
+     //
+    }
+
+    public String getParentId() {
+        //look in FilesManager for method
+        //how do we look back at previous commit?
+        return parentId;
+    }
+
+
+    public String getMessage() {
+        return message;
+    }
+
+    public HashMap<String, String> getCopyOfStage() {
+        return snapshot;
+    }
+
+    public void removeAFile(String fileName) {
+        FilesManager.deleteOneFileInStagingFolder(fileName);
+    }
+
+    public void addFile(String fileName, String fileShaId) {
+        snapshot.put(fileName, fileShaId);
+    }
+
+    public void copyMap(HashMap<String, String> copy) {
+        snapshot = copy;
+    }
+
+    //more methods?
+
+
+}
