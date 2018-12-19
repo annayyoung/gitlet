@@ -1,0 +1,326 @@
+package gitlet;
+
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+import java.util.HashMap;
+import java.util.ArrayList;
+import java.io.IOException;
+import java.util.function.Function;
+
+
+/* Driver class for Gitlet, the tiny stupid version-control system.
+   @author
+*/
+public class Main implements Serializable {
+    /* Usage: java gitlet.Main ARGS, where ARGS contains
+       <COMMAND> <OPERAND> .... */
+    //static BranchManager branch;
+    //static Commit firstCommit;
+
+    static String pathString;
+
+    public static void init() throws IOError, IOException {
+
+
+
+        System.out.println("into init");
+
+
+
+        // create dir if needed
+        if (FilesManager.createGitletDirectoryIfNeeded()) {
+            pathString = "__gitlet";
+
+            // need make a commit
+            Commit firstCommit = new Commit(null, "initial commit");
+
+            //create a shaID for firstcommit
+            String firstCommitShaId = FilesManager.getCommitShaId(firstCommit); //not done implementing getShaId
+
+            //need make a bracnh withhead point to the commit above
+            BranchManager branch = new BranchManager();
+
+            //HashMap<String, String> branchMap = branch.getBranches();
+            // branchMap.put("master", firstCommit.getId());
+
+            //set head pointer to init commit on master branch
+            branch.setHeadPointer("master", firstCommitShaId);
+
+            System.out.println(branch == null);
+            System.out.println(branch.getBranches());
+            System.out.println(branch.getBranches().size());
+            //save commit to disk -> done in constructor
+            FilesManager.createInitialCommit(firstCommit);
+            //FilesManager.writeObjectToFile(firstCommit);
+
+            //save brach to disk -> done in constructor? -> how do we keep track of changes and keep serializing changes?
+
+
+            FilesManager.createInitialBranch(branch);
+
+            // make a marker file
+            FilesManager.initiateMarkerFile();
+
+            //else throw an error and abort init
+        } else {
+            System.out.println("A gitlet version control system already exists in the current directory.");
+            throw new Error("A gitlet version control system already exists in the current directory.");
+        }
+
+
+    }
+
+    //passing in actual names such as "wug.txt"
+    public static void add(String... fileName) throws IOException {
+        //ADD FAILURE CASE
+
+        //get most recent commit and branches
+        File[] listStagingFiles = FilesManager.getListOfFilesInStagingFolder();
+        Stage newStage = new Stage();
+        BranchManager branchObject = FilesManager.getBranchManager();
+        System.out.println(branchObject.getBranches().size());
+        Commit parentCommit = FilesManager.getLastCommit(branchObject);
+        // HashMap<String, String> branchMap = BranchManager.getBranches();
+
+        //parentCommitMap is the hashmap of things that have been added to stage StageMap
+        //WHEN WORKING ON COMMIT REMEMBER TO PUT THINGS THAT GET ADDED INTO COMMIT HASHMAP
+        HashMap<String, String> parentCommitMap = parentCommit.getCopyOfStage();
+        System.out.println(parentCommitMap);
+
+        //first put the values in the staging area map -> assigns pathnames to SHA-1's
+        newStage.add(fileName);
+        HashMap<String, String> copyOfStage = newStage.returnAll();
+
+        for (String files : fileName) {
+
+            //if the values associated with these String keys equal any of the sha-id filenames in the archived folder
+            //do nothing because that means that you made no changes to it
+            File checkTempFileStage = FilesManager.createANewFileInArchive(copyOfStage.get(files));
+
+
+            //File[] listStagingFiles = FilesManager.getListOfFilesInStagingFolder();
+            System.out.println(listStagingFiles);
+            File[] listArchiveFiles = FilesManager.getListOfFilesInArchiveFolder();
+            System.out.println(listArchiveFiles);
+
+            //looks to see if file exists in archive
+            if (!checkTempFileStage.isFile()) {
+                FilesManager.writeObjectToArchiveFile(files, FilesManager.getObjectShaId(checkTempFileStage));
+                System.out.println("Doing nothing because nothing has changed");
+                //return;
+
+
+            } else {
+                //check if file name exists in the map
+                if ((parentCommitMap == null) || (parentCommitMap.get(files) == null)) {
+
+                    newStage.add(files);
+                }
+
+                //get list of files in staging, check if any contain  + _untrackFileNameMarker
+                else {
+                    for (File f : listStagingFiles) {
+                        String fileString = f.getName();
+                        if (fileString.contains(FilesManager._untrackFileNameMarker)) {
+
+                            //rename the file to get rid of untrack marker
+                            fileString.replaceAll(FilesManager._untrackFileNameMarker, "");
+                            newStage.add(files);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+    public static void rm(String... fileToRemove) throws IOException {
+//files are not getting tagged!!
+        //read in parent commit and branches
+      //  Stage newStage = new Stage();
+        //HashMap<String, String> stageCopy = newStage.getStageCopy();
+        BranchManager branchObject = FilesManager.getBranchManager();
+        System.out.println(branchObject.getBranches().size());
+        Commit parentCommit = FilesManager.getLastCommit(branchObject);
+        HashMap<String, String> parentCommitMap = parentCommit.getCopyOfStage();
+
+
+        for (String files : fileToRemove) {
+
+          //  File tempFile = new File(files);
+            //String fileToRemoveSHA = FilesManager.getObjectShaId(tempFile);
+            File checkIfInStageArea = new File("__gitlet/staging/" + files);
+            String checkIfInStageAreaString = checkIfInStageArea.toString();
+
+            //write in a different method
+            //if parent map is null or file is not in parent map -> look to stage area
+            //unstage if it is in stage area -> else throw error
+            if ((parentCommitMap == null) || (!parentCommitMap.containsKey(files))) {
+                if (checkIfInStageArea.isFile()) {
+                    FilesManager.deleteOneFileInStagingFolder(files);
+                }
+            }
+            //if file is tracked -> delete from working directory
+            //if file is staged -> unstage and mark for untracking
+            if (parentCommitMap.containsKey(files)) {
+                if (checkIfInStageArea.isFile()) {
+                    checkIfInStageAreaString.replaceAll(checkIfInStageAreaString, checkIfInStageAreaString + FilesManager._untrackFileNameMarker);
+                } else {
+                    FilesManager.createUntrackedFileInStaging(files);
+                    FilesManager.deleteOneFile(files);
+                }
+
+            }
+
+
+          /*  if (checkIfInStageArea.isFile()) {
+                FilesManager.deleteOneFileInStagingFolder(files);
+            } */
+
+            //mark the file to be untracked by next commit
+           // files.replaceAll(files, files + FilesManager._untrackFileNameMarker);
+        }
+    }
+
+
+    static public void commit(String message) throws IOException {
+
+        //update branch pointers
+
+
+        BranchManager branchObject = FilesManager.getBranchManager();
+        System.out.println(branchObject.getBranches().size());
+        Commit parentCommit = FilesManager.getLastCommit(branchObject);
+
+        Commit newCommit = new Commit(FilesManager.getCommitShaId(parentCommit), message);
+        //child commit gets parent commit map by default
+
+
+        HashMap<String, String> newCommitMap = parentCommit.getCopyOfStage();
+        //put files in staging area to filesMap
+        File[] stagingFiles = FilesManager.getListOfFilesInStagingFolder();
+        for (File file : stagingFiles) {
+            System.out.println("staging files: file=" + file.toString());
+            if (file.isFile()) {
+                String fileName = file.getName();
+                System.out.println(fileName);
+
+                //check if has a marker
+                if (fileName.contains(FilesManager._untrackFileNameMarker)) {// has a marker
+                    fileName = fileName.replaceAll(FilesManager._untrackFileNameMarker, "");
+                    //if parent map has this key, remove it from current commit's map
+                    if (newCommitMap.containsKey(fileName)) {
+                        newCommitMap.remove(fileName);
+                    }
+                    newCommit.copyMap(newCommitMap);
+                    newCommit.removeAFile(fileName);
+                } else {
+
+                    //get byte array for file
+                    byte[] fileBytes = Utils.readContents(file);
+                    String fileSHAid = Utils.sha1(fileBytes);
+                    newCommit.addFile(fileName, fileSHAid);
+                    //archive the file
+                   // Utils.writeContents(FilesManager.createANewFileInArchive(fileSHAid), fileBytes);
+
+                }
+            }
+        }
+        //updates head pointer, serializes commit, serializes branch
+
+        FilesManager.deleteFilesInStagingFolder();
+        String newCommitShaId = FilesManager.getCommitShaId(newCommit);
+        FilesManager.writeObjectToFile(newCommit, newCommitShaId);
+        branchObject.setHeadPointer("master", newCommitShaId);
+        FilesManager.writeObjectToFile(branchObject, "fixed_branch_object");
+    }
+
+
+
+
+
+
+            /*THIS IS FOR COMMIT
+            //next check if string filename is in map and if the shaID's match
+            //if they don't, if there is an old version in stage -> delete it
+            //create a copy of the file in the working directory you want to add and then copy that
+            //file into the staging folder
+            else if (!parentCommitMap.get(files).equals(tempFileID)) {
+                FilesManager.stagingAFile(files);
+            } */
+
+
+
+     /*   }
+        System.out.println("in Main add");
+        for (int i = 0; i < fileName.length; i++) {
+            File file = new File(fileName[i]);
+            System.out.println(file);
+            //check if file exists
+            if (!file.isFile()) {
+                //check if file got marked for removal -> removes tag from filename and adds
+              /*  if (file.equals(file + "_rm")) {
+                    String fileString = file.toString();
+                    fileString.substring(0, fileString.length() - 3);
+                    File removeTag = new File(fileString);
+                    file.renameTo(removeTag);
+                } else {
+                    throw new Error("File does not exist.");
+                }
+            }  */
+        //make a copy of file to add
+
+
+        //call Stage add() method on a String filename
+
+
+        //make a copy of file to add
+
+        //call Stage add method to put string into map
+        ;
+
+        /*
+    //THIS WILL GO IN REMOVE
+    //check if the SHA is in the parentCommit map, if they are delete the file from working directory
+                        if (parentCommitMap.get(files).equals(tempFileID)) {
+                            FilesManager.deleteOneFile(files);
+                        }
+                        //not being tracked but is staged (in staging folder) -> just remove from staging folder and
+                        //remove values from staging map
+                        else if (tempStageFile.isFile()) {
+                            FilesManager.deleteOneFileInStagingFolder(files);
+                        } */
+
+
+    public static void main(String... args) throws IOException {
+        System.out.println("into main");
+        for (String a : args) {
+            if (a.equals("init")) {
+                init();
+            }
+
+            //File anna = new File(pathString + "/work/anna.txt");
+
+            if (a.equals("add")) {
+                add("anna.txt");
+                //add("helloworld.txt");
+                add("tester.txt");
+            }
+
+            if (a.equals("rm")) {
+                System.out.println("in rm method");
+                rm("anna.txt");
+            }
+
+            if (a.equals("commit")) {
+                commit("hello!");
+            }
+
+            System.out.println(a);
+
+        }
+    }
+}
